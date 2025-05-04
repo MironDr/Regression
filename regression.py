@@ -18,73 +18,84 @@ y = data[:, 1].reshape(-1, 1)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
 
-# Model 1: Liniowy model Y = w0 + w1 * X
-def add_bias(X):
-    return np.hstack((np.ones((X.shape[0], 1)), X))
+class NeuralNetwork:
+    def __init__(self, input_dim, hidden_dim, output_dim, activation='tanh'):
+        self.W1 = np.random.randn(input_dim, hidden_dim) * 0.1
+        self.b1 = np.zeros((1, hidden_dim))
+        self.W2 = np.random.randn(hidden_dim, output_dim) * 0.1
+        self.b2 = np.zeros((1, output_dim))
+
+        if activation == 'tanh':
+            self.activation = np.tanh
+            self.activation_deriv = lambda x: 1 - np.tanh(x) ** 2
+        elif activation == 'sigmoid':
+            self.activation = lambda x: 1 / (1 + np.exp(-x))
+            self.activation_deriv = lambda x: self.activation(x) * (1 - self.activation(x))
+        elif activation == 'relu':
+            self.activation = lambda x: np.maximum(0, x)
+            self.activation_deriv = lambda x: (x > 0).astype(float)
+        else:
+            raise ValueError("Unsupported activation function")
+
+    def forward(self, X):
+        self.z1 = X @ self.W1 + self.b1
+        self.a1 = self.activation(self.z1)
+        self.z2 = self.a1 @ self.W2 + self.b2
+        return self.z2
+
+    def backward(self, X, y, output, lr=0.01):
+        m = X.shape[0]
+        dz2 = output - y
+        dW2 = (self.a1.T @ dz2) / m
+        db2 = np.sum(dz2, axis=0, keepdims=True) / m
+
+        dz1 = dz2 @ self.W2.T * self.activation_deriv(self.z1)
+        dW1 = (X.T @ dz1) / m
+        db1 = np.sum(dz1, axis=0, keepdims=True) / m
+
+        self.W1 -= lr * dW1
+        self.b1 -= lr * db1
+        self.W2 -= lr * dW2
+        self.b2 -= lr * db2
+
+    def train(self, X, y, epochs=1000, lr=0.01):
+        for epoch in range(epochs):
+            output = self.forward(X)
+            self.backward(X, y, output, lr)
+            if epoch % 200 == 0:
+                loss = np.mean((output - y) ** 2)
+                print(f"Epoch {epoch}, Loss: {loss:.4f}")
+
+    def predict(self, X):
+        return self.forward(X)
 
 
-def gradient_descent(X, y, lr=0.01, n_iters=1000):
-    m, n = X.shape
-    w = np.zeros((n, 1))
-    for _ in range(n_iters):
-        y_pred = X @ w
-        error = y_pred - y
-        grad = (2 / m) * X.T @ error
-        w -= lr * grad
-    return w
+def evaluate(model, X, y, name=""):
+    pred = model.predict(X)
+    mse = np.mean((pred - y) ** 2)
+    print(f"[{name}] MSE: {mse:.4f}")
+    return mse
 
 
-X_train_bias = add_bias(X_train)
-X_test_bias = add_bias(X_test)
+if __name__ == "__main__":
+    # Sieć z aktywacją tanh
+    print("\n--- Trening sieci z aktywacją tanh ---")
+    model_tanh = NeuralNetwork(input_dim=X.shape[1], hidden_dim=10, output_dim=1, activation='tanh')
+    model_tanh.train(X_train, y_train, epochs=1000, lr=0.05)
+    mse_tanh = evaluate(model_tanh, X_test, y_test, name="TANH")
 
-w1 = gradient_descent(X_train_bias, y_train)
+    # Sieć z aktywacją ReLU
+    print("\n--- Trening sieci z aktywacją ReLU ---")
+    model_relu = NeuralNetwork(input_dim=X.shape[1], hidden_dim=10, output_dim=1, activation='relu')
+    model_relu.train(X_train, y_train, epochs=1000, lr=0.05)
+    mse_relu = evaluate(model_relu, X_test, y_test, name="RELU")
 
-# Predykcja
-y_pred_train1 = X_train_bias @ w1
-y_pred_test1 = X_test_bias @ w1
-
-# Walidacja Modelu 1
-mse_train1 = mean_squared_error(y_train, y_pred_train1)
-mse_test1 = mean_squared_error(y_test, y_pred_test1)
-
-print("\nModel 1 - Liniowy:")
-print(f"MSE train: {mse_train1:.4f}")
-print(f"MSE test: {mse_test1:.4f}")
-
-# Model 2: Rozszerzony model nieliniowy Y = w0 + w1*X + w2*X^2
-X2_train = np.hstack((np.ones((X_train.shape[0], 1)), X_train, X_train ** 2))
-X2_test = np.hstack((np.ones((X_test.shape[0], 1)), X_test, X_test ** 2))
-
-w2 = gradient_descent(X2_train, y_train)
-
-y_pred_train2 = X2_train @ w2
-y_pred_test2 = X2_test @ w2
-
-# Walidacja Modelu 2
-mse_train2 = mean_squared_error(y_train, y_pred_train2)
-mse_test2 = mean_squared_error(y_test, y_pred_test2)
-
-print("\nModel 2 - Kwadratowy:")
-print(f"MSE train: {mse_train2:.4f}")
-print(f"MSE test: {mse_test2:.4f}")
-
-# Porównanie
-print("\nPorównanie modeli:")
-print(f"Model 1 (test MSE): {mse_test1:.4f}")
-print(f"Model 2 (test MSE): {mse_test2:.4f}")
-if mse_test1 < mse_test2:
-    print("Lepszy wynik testowy ma Model 1 (liniowy)")
-else:
-    print("Lepszy wynik testowy ma Model 2 (kwadratowy)")
-
-# Wizualizacja
-plt.scatter(X, y, label="Dane", alpha=0.5)
-x_plot = np.linspace(X.min(), X.max(), 100).reshape(-1, 1)
-x_plot_bias = add_bias(x_plot)
-x_plot_quad = np.hstack((np.ones((x_plot.shape[0], 1)), x_plot, x_plot ** 2))
-
-plt.plot(x_plot, x_plot_bias @ w1, label="Model 1 (liniowy)", color='red')
-plt.plot(x_plot, x_plot_quad @ w2, label="Model 2 (kwadratowy)", color='green')
-plt.legend()
-plt.title("Porównanie modeli regresyjnych")
-plt.show()
+    # Prosta ocena jakości dopasowania
+    print("\n--- Ocena dopasowania ---")
+    for name, mse in [("TANH", mse_tanh), ("RELU", mse_relu)]:
+        if mse > 1.0:
+            print(f"{name}: Zbyt małe dopasowanie (underfitting)")
+        elif mse < 1e-3:
+            print(f"{name}: Możliwe przeuczenie (overfitting)")
+        else:
+            print(f"{name}: Optymalne dopasowanie")
