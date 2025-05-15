@@ -90,9 +90,16 @@ if __name__ == "__main__":
     model_relu.train(X_train, y_train, epochs=1000, lr=0.05)
     mse_relu = evaluate(model_relu, X_test, y_test, name="RELU")
 
+
+    # Sieć z aktywacją SIGMOID
+    print("\n--- Trening sieci z aktywacją SIGMOID ---")
+    model_sigm = NeuralNetwork(input_dim=X.shape[1], hidden_dim=10, output_dim=1, activation='sigmoid')
+    model_sigm.train(X_train, y_train, epochs=1000, lr=0.05)
+    mse_sigm = evaluate(model_relu, X_test, y_test, name="SIGMOID")
+
     # Prosta ocena jakości dopasowania
     print("\n--- Ocena dopasowania ---")
-    for name, mse in [("TANH", mse_tanh), ("RELU", mse_relu)]:
+    for name, mse in [("TANH", mse_tanh), ("RELU", mse_relu), ("SIGMOID", mse_sigm)]:
         if mse > 1.0:
             print(f"{name}: Zbyt małe dopasowanie (underfitting)")
         elif mse < 1e-3:
